@@ -9,6 +9,28 @@ use winit::window::{Window, WindowId};
 const WIDTH: u32 = 1080;
 const HEIGHT: u32 = 720;
 
+const FONT: [[[u8; 3]; 5]; 10] = [
+    // 0
+    [[1,1,1],[1,0,1],[1,0,1],[1,0,1],[1,1,1]],
+    // 1
+    [[0,1,0],[0,1,0],[0,1,0],[0,1,0],[0,1,0]],
+    // 2
+    [[1,1,1],[0,0,1],[1,1,1],[1,0,0],[1,1,1]],
+    // 3
+    [[1,1,1],[0,0,1],[1,1,1],[0,0,1],[1,1,1]],
+    // 4
+    [[1,0,1],[1,0,1],[1,1,1],[0,0,1],[0,0,1]],
+    // 5
+    [[1,1,1],[1,0,0],[1,1,1],[0,0,1],[1,1,1]],
+    // 6
+    [[1,1,1],[1,0,0],[1,1,1],[1,0,1],[1,1,1]],
+    // 7
+    [[1,1,1],[0,0,1],[0,0,1],[0,0,1],[0,0,1]],
+    // 8
+    [[1,1,1],[1,0,1],[1,1,1],[1,0,1],[1,1,1]],
+    // 9
+    [[1,1,1],[1,0,1],[1,1,1],[0,0,1],[0,0,1]],
+];
 
 struct RenderContext {
     window: &'static Window,
@@ -33,6 +55,9 @@ struct Game {
     target_window: Option<WindowId>,
     frame_count: usize,
     last_frame_time: Instant,
+    fps_display: u32,
+    fps_counter: u32,
+    fps_timer: f32,
 }
 
 impl Game {
@@ -41,6 +66,9 @@ impl Game {
             target_window: None,
             last_frame_time: Instant::now(),
             frame_count: 0,
+            fps_display: 0,
+            fps_counter: 0,
+            fps_timer: 0.0,
         }
     }
 
@@ -50,12 +78,13 @@ impl Game {
 
         self.last_frame_time = now;
 
-        if delta_time > 0.0 {
-            let fps = 1.0 / delta_time;
-            let title = format!("FPS: {:.2}", fps);
-            if self.frame_count % 30 == 0 {
-                context.window.set_title(&title);
-            }
+        self.fps_timer += delta_time;
+        self.fps_counter += 1;
+
+        if self.fps_timer >= 0.5 {
+            self.fps_display = (self.fps_counter as f32 / self.fps_timer) as u32;
+            self.fps_timer = 0.0;
+            self.fps_counter = 0;
         }
 
         self.frame_count += 1;
@@ -71,7 +100,41 @@ impl Game {
         let center_y = (HEIGHT / 2) as f32;
         let color_mod = (self.frame_count % 255) as u8; 
 
+        let start_x = 10;
+        let start_y = 10;
+        let scale = 5;
+        let spacing = 4 * scale;
+
+        let fps_to_draw = self.fps_display as usize;
+        let hundreds = (fps_to_draw / 100) % 10;
+        let tens = (fps_to_draw / 10) % 10;
+        let ones = fps_to_draw  % 10;
+
         for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
+            let px = i % WIDTH as usize;
+            let py = i / WIDTH as usize;
+
+            let mut pixel_painted = false;
+            for (slot, digit) in [tens, ones].iter().enumerate() {
+                let digit_x = start_x + (slot * spacing);
+                if px >= digit_x && px < digit_x + (3 * scale) && 
+                   py >= start_y && py < start_y + (5 * scale) {
+
+                    let grid_x = (px - digit_x) / scale;
+                    let grid_y = (py - start_y) / scale;
+
+                    if FONT[*digit][grid_y][grid_x] == 1 {
+                        pixel.copy_from_slice(&[255, 255, 0, 255]);
+                        pixel_painted = true;
+                        break;
+                    }
+                }
+            }
+
+            if pixel_painted {
+                continue;
+            }
+
             let x = (i % WIDTH as usize * 255 / WIDTH as usize) as u8;
             let y = (i / WIDTH as usize * 255 / WIDTH as usize) as u8;
 
